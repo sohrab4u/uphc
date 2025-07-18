@@ -167,6 +167,12 @@ def create_pdf(df, title):
     return pdf.output(dest='S').encode('latin1')
 
 def to_combined_excel(facility_df, district_df, total_registered, total_reported):
+    # Debug: Log dictionaries before creating combined_summary
+    with open("debug.log", "a") as f:
+        f.write("--- Combined Excel Dictionaries ---\n")
+        f.write(f"total_registered: {total_registered}\n")
+        f.write(f"total_reported: {total_reported}\n")
+
     output = BytesIO()
     combined_summary = pd.DataFrame({
         'Metric': ['Total Facilities (AAM-UPHC)', 'Total Facilities (AAM-USHC)', 'Reported Facilities (AAM-UPHC)', 'Reported Facilities (AAM-USHC)'],
@@ -234,6 +240,10 @@ if footfall_file and master_file:
             'AAM_Type': 'AAM_Type',
             'aam type': 'AAM_Type',
             'aam_type': 'AAM_Type',
+            'UPHC': 'AAM_Type',
+            'USHC': 'AAM_Type',
+            'AAM_USHC': 'AAM_Type',
+            'AAM_UPHC': 'AAM_Type',
             'District': 'District_Name',
             'District_Name': 'District_Name',
             'district': 'District_Name',
@@ -263,6 +273,10 @@ if footfall_file and master_file:
             'AAM_Type': 'AAM_Type',
             'aam type': 'AAM_Type',
             'aam_type': 'AAM_Type',
+            'UPHC': 'AAM_Type',
+            'USHC': 'AAM_Type',
+            'AAM_USHC': 'AAM_Type',
+            'AAM_UPHC': 'AAM_Type',
             'District_Name': 'District_Name',
             'District': 'District_Name',
             'district': 'District_Name',
@@ -292,13 +306,34 @@ if footfall_file and master_file:
             f.write(f"Footfall DataFrame Facility_Name count (all entries): {len(footfall_df['Facility_Name'])}\n")
             f.write(f"Footfall DataFrame Facility_Name unique count: {footfall_df['Facility_Name'].nunique()}\n")
 
-        # Standardize AAM_Type and Facility_Name
-        footfall_df['AAM_Type'] = footfall_df['AAM_Type'].str.strip().str.upper()
-        master_df['AAM_Type'] = master_df['AAM_Type'].str.strip().str.upper()
+        # Standardize AAM_Type values to AAM-UPHC or AAM-USHC
+        def standardize_aam_type(value):
+            if isinstance(value, str):
+                value = value.strip().upper()
+                if 'UPHC' in value:
+                    return 'AAM-UPHC'
+                if 'USHC' in value:
+                    return 'AAM-USHC'
+            return value
+
+        footfall_df['AAM_Type'] = footfall_df['AAM_Type'].apply(standardize_aam_type)
+        master_df['AAM_Type'] = master_df['AAM_Type'].apply(standardize_aam_type)
         footfall_df['Facility_Name'] = footfall_df['Facility_Name'].str.strip().str.upper()
         master_df['Facility_Name'] = master_df['Facility_Name'].str.strip().str.upper()
 
         footfall_df['Entry_Date'] = pd.to_datetime(footfall_df['Entry_Date'], errors='coerce')
+
+        # Debug: Log data after standardization
+        with open("debug.log", "a") as f:
+            f.write("--- Data After Standardization ---\n")
+            f.write(f"Master DataFrame AAM_Type values: {master_df['AAM_Type'].unique().tolist()}\n")
+            f.write(f"Master DataFrame Facility_Name count (all entries): {len(master_df['Facility_Name'])}\n")
+            f.write(f"Master DataFrame Facility_Name unique count: {master_df['Facility_Name'].nunique()}\n")
+            f.write(f"Footfall DataFrame AAM_Type values: {footfall_df['AAM_Type'].unique().tolist()}\n")
+            f.write(f"Footfall DataFrame Facility_Name count (all entries): {len(footfall_df['Facility_Name'])}\n")
+            f.write(f"Footfall DataFrame Facility_Name unique count: {footfall_df['Facility_Name'].nunique()}\n")
+            f.write(f"Sample master_df facilities: {master_df['Facility_Name'].head().tolist()}\n")
+            f.write(f"Sample footfall_df facilities: {footfall_df['Facility_Name'].head().tolist()}\n")
 
         # Set default dates for the entire dataset
         unique_dates = footfall_df['Entry_Date'].dropna().dt.date.unique()
@@ -331,17 +366,8 @@ if footfall_file and master_file:
                 disabled=not (footfall_file and master_file)
             )
 
-        # Debug: Log data after standardization and date rendering
+        # Debug: Log date rendering
         with open("debug.log", "a") as f:
-            f.write("--- Data After Standardization ---\n")
-            f.write(f"Master DataFrame AAM_Type values: {master_df['AAM_Type'].unique().tolist()}\n")
-            f.write(f"Master DataFrame Facility_Name count (all entries): {len(master_df['Facility_Name'])}\n")
-            f.write(f"Master DataFrame Facility_Name unique count: {master_df['Facility_Name'].nunique()}\n")
-            f.write(f"Footfall DataFrame AAM_Type values: {footfall_df['AAM_Type'].unique().tolist()}\n")
-            f.write(f"Footfall DataFrame Facility_Name count (all entries): {len(footfall_df['Facility_Name'])}\n")
-            f.write(f"Footfall DataFrame Facility_Name unique count: {footfall_df['Facility_Name'].nunique()}\n")
-            f.write(f"Sample master_df facilities: {master_df['Facility_Name'].head().tolist()}\n")
-            f.write(f"Sample footfall_df facilities: {footfall_df['Facility_Name'].head().tolist()}\n")
             f.write(f"Selected Date Range: From {st.session_state.start_date} to {st.session_state.end_date}\n")
             f.write("Date Inputs Rendered: From Date and To Date\n")
 
@@ -362,6 +388,11 @@ if footfall_file and master_file:
         # Calculate metrics for dashboard (count all Facility_Name entries, including duplicates)
         total_registered = master_df.groupby('AAM_Type')['Facility_Name'].count().to_dict()
         total_reported = footfall_df_filtered.groupby('AAM_Type')['Facility_Name'].count().to_dict()
+
+        # Debug: Log total_reported before AAM_Type filtering
+        with open("debug.log", "a") as f:
+            f.write("--- Total Reported Before AAM_Type Filtering ---\n")
+            f.write(f"total_reported: {total_reported}\n")
 
         total_uphc = total_registered.get('AAM-UPHC', 0)
         total_ushc = total_registered.get('AAM-USHC', 0)
@@ -416,9 +447,15 @@ if footfall_file and master_file:
                 """, unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
-        # Filter by AAM Type
+        # Filter by AAM Type for summaries
         footfall_df_filtered = footfall_df_filtered[footfall_df_filtered['AAM_Type'] == aam_type_filter.upper()]
         master_df_filtered = master_df[master_df['AAM_Type'] == aam_type_filter.upper()]
+
+        # Debug: Log total_reported after AAM_Type filtering
+        with open("debug.log", "a") as f:
+            f.write("--- Total Reported After AAM_Type Filtering ---\n")
+            f.write(f"Filtered Footfall DataFrame AAM_Type values: {footfall_df_filtered['AAM_Type'].unique().tolist()}\n")
+            f.write(f"Filtered Footfall DataFrame Facility_Name count (all entries): {len(footfall_df_filtered['Facility_Name'])}\n")
 
         footfall_df_filtered.fillna(0, inplace=True)
         master_df_filtered.fillna(0, inplace=True)
@@ -444,10 +481,10 @@ if footfall_file and master_file:
 
         # District-wise Summary (date-filtered, count all Facility_Name entries)
         total_registered_summary = master_df_filtered.groupby('District_Name')['Facility_Name'].count().reset_index(name='Registered_Facilities')
-        total_reported = footfall_df_filtered.groupby('District_Name')['Facility_Name'].count().reset_index(name='Reported_Facilities')
+        total_reported_summary = footfall_df_filtered.groupby('District_Name')['Facility_Name'].count().reset_index(name='Reported_Facilities')
         total_footfall = footfall_df_filtered.groupby('District_Name')['Footfall_Total'].sum().reset_index(name='Total_Footfall')
 
-        district_summary = total_registered_summary.merge(total_reported, on='District_Name', how='left') \
+        district_summary = total_registered_summary.merge(total_reported_summary, on='District_Name', how='left') \
                                                   .merge(total_footfall, on='District_Name', how='left')
 
         district_summary['Reported_Facilities'].fillna(0, inplace=True)
